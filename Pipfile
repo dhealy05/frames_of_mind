@@ -9,6 +9,7 @@ scikit-learn = "*"
 matplotlib = "*"
 imageio = "*"
 openai = "*"
+grip = "*"
 
 [dev-packages]
 

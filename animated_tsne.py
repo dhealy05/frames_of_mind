@@ -5,6 +5,7 @@ from matplotlib.lines import Line2D
 from typing import List, Tuple, Dict, Optional, Union
 import imageio
 from pathlib import Path
+from textwrap import wrap
 
 class AnimatedTSNEVisualizer:
 
@@ -60,74 +61,130 @@ class AnimatedTSNEVisualizer:
 ####### Animation
 
     def create_frame(self,
-                    displayed_indices: List[int],
-                    figsize: Tuple[int, int] = (12, 8),
-                    show_line: bool = False) -> plt.Figure:
-        if self.cached_tsne_coords is None:
-            raise ValueError("Must call compute_tsne_embedding() or from_dict() first")
+                        displayed_indices: List[int],
+                        figsize: Tuple[int, int] = (12, 8),
+                        show_line: bool = False) -> plt.Figure:
+            if self.cached_tsne_coords is None:
+                raise ValueError("Must call compute_tsne_embedding() or from_dict() first")
 
-        # Create figure with fixed size and margins
-        fig = plt.figure(figsize=figsize)
-        fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
+            # Create figure with fixed size and margins
+            fig = plt.figure(figsize=figsize)
 
-        # Create a gridspec with different column widths
-        gs = plt.GridSpec(1, 2, width_ratios=[3, 1], figure=fig)
+            # Create a gridspec with three rows for title and main content
+            gs = plt.GridSpec(3, 2,
+                             width_ratios=[2, 1],
+                             height_ratios=[0.3, 0.85, 0.85],
+                             hspace=0.3)
 
-        # Main plot for t-SNE
-        ax_main = fig.add_subplot(gs[0])
-        # Legend plot
-        ax_legend = fig.add_subplot(gs[1])
+            # Title text area (spans full width)
+            ax_title = fig.add_subplot(gs[0, :])
+            ax_title.axis('off')
 
-        # Get displayed points
-        displayed_coords = self.cached_tsne_coords[displayed_indices]
-        displayed_labels = [self.cached_labels[i] for i in displayed_indices]
+            # Main plot for t-SNE
+            ax_main = fig.add_subplot(gs[1:, 0])
+            # Legend plot
+            ax_legend = fig.add_subplot(gs[1:, 1])
 
-        # Set consistent axis limits with padding for main plot
-        all_coords = self.cached_tsne_coords
-        padding = 0.1
-        x_min, x_max = all_coords[:, 0].min(), all_coords[:, 0].max()
-        y_min, y_max = all_coords[:, 1].min(), all_coords[:, 1].max()
-        x_range = x_max - x_min
-        y_range = y_max - y_min
+            # Get displayed points
+            displayed_coords = self.cached_tsne_coords[displayed_indices]
+            displayed_labels = [self.cached_labels[i] for i in displayed_indices]
 
-        ax_main.set_xlim(x_min - padding * x_range, x_max + padding * x_range)
-        ax_main.set_ylim(y_min - padding * y_range, y_max + padding * y_range)
+            # Set consistent axis limits with padding for main plot
+            all_coords = self.cached_tsne_coords
+            padding = 0.1
+            x_min, x_max = all_coords[:, 0].min(), all_coords[:, 0].max()
+            y_min, y_max = all_coords[:, 1].min(), all_coords[:, 1].max()
+            x_range = x_max - x_min
+            y_range = y_max - y_min
 
-        # Draw connecting line if enabled
-        if show_line and len(displayed_coords) > 1:
-            ax_main.plot(displayed_coords[:, 0], displayed_coords[:, 1],
-                        '-', color='gray', alpha=0.5, linewidth=1)
+            ax_main.set_xlim(x_min - padding * x_range, x_max + padding * x_range)
+            ax_main.set_ylim(y_min - padding * y_range, y_max + padding * y_range)
 
-        # Color points based on their order of appearance
-        colors = plt.cm.viridis(np.linspace(0, 1, len(displayed_indices)))
-        scatter = ax_main.scatter(displayed_coords[:, 0], displayed_coords[:, 1],
-                                c=colors, s=100, zorder=2)  # Increased zorder to keep points on top
+            # Draw connecting line if enabled
+            if show_line and len(displayed_coords) > 1:
+                ax_main.plot(displayed_coords[:, 0], displayed_coords[:, 1],
+                            '-', color='gray', alpha=0.5, linewidth=1)
 
-        # Add numerical labels to points
-        for i in range(len(displayed_indices)):
-            ax_main.annotate(str(i+1),
-                           (displayed_coords[i, 0], displayed_coords[i, 1]),
-                           xytext=(5, 5), textcoords='offset points',
-                           fontsize=10, color='black',
-                           bbox=dict(facecolor='white', edgecolor='none', alpha=0.7),
-                           zorder=3)  # Highest zorder for labels
+            # Color points based on their order of appearance
+            colors = plt.cm.viridis(np.linspace(0, 1, len(displayed_indices)))
+            scatter = ax_main.scatter(displayed_coords[:, 0], displayed_coords[:, 1],
+                                    c=colors, s=100, zorder=2)  # Increased zorder to keep points on top
 
-        # Set title to show the most recent label
-        ax_main.set_title(f'Current point: {displayed_labels[-1]}', pad=20)
+            # Add numerical labels to points with better positioning
+            for i in range(len(displayed_indices)):
+                # Calculate offset direction based on point position
+                x, y = displayed_coords[i]
+                x_center = (x_max + x_min) / 2
+                y_center = (y_max + y_min) / 2
 
-        # Create fixed legend on the right
-        ax_legend.axis('off')
-        legend_text = []
-        for i, label in enumerate(displayed_labels):
-            legend_text.append(f"{i+1}. {label}")
+                # Adjust offset direction to avoid overlapping
+                x_offset = -15 if x > x_center else 15
+                y_offset = -15 if y > y_center else 15
 
-        ax_legend.text(0, 0.95, '\n'.join(legend_text),
-                      transform=ax_legend.transAxes,
-                      verticalalignment='top',
-                      fontsize=10,
-                      fontfamily='monospace')
+                ax_main.annotate(
+                    str(i+1),
+                    (x, y),
+                    xytext=(x_offset * 0.3, y_offset * 0.3),
+                    textcoords='offset points',
+                    fontsize=9,
+                    color='black',
+                    bbox=dict(
+                        facecolor='white',
+                        edgecolor='none',
+                        alpha=0.7,
+                        pad=0.5
+                    ),
+                    zorder=3,
+                    ha='center',
+                    va='center'
+                )
 
-        return fig
+            # Enhanced legend formatting
+            ax_legend.axis('off')
+            legend_text = []
+
+            for i, label in enumerate(displayed_labels):
+                # Format with consistent spacing and show more text
+                if len(str(label)) > 35:
+                    wrapped_label = str(label)[:32] + "..."
+                else:
+                    wrapped_label = str(label)
+                legend_text.append(f"{str(i+1).rjust(2)}. {wrapped_label}")
+
+            # Enhanced legend text display
+            ax_legend.text(
+                0.02, 0.98,
+                '\n'.join(legend_text),
+                transform=ax_legend.transAxes,
+                verticalalignment='top',
+                fontsize=12,
+                fontfamily='monospace',
+                linespacing=1.2
+            )
+
+            # Enhanced title with text wrapping
+            current_label = displayed_labels[-1]
+
+            # Wrap text to 3 lines with larger width
+            wrapped_text = wrap(current_label, width=100)
+            if len(wrapped_text) > 5:
+                title_text = '\n'.join(wrapped_text[:5]) + '...'
+            else:
+                title_text = '\n'.join(wrapped_text)
+
+            ax_title.text(0.5, 0.8,
+                f'{title_text}',
+                horizontalalignment='center',
+                verticalalignment='center',
+                fontsize=14,
+                fontweight='bold',
+                transform=ax_title.transAxes,
+                linespacing=1.2
+            )
+
+            # Adjust layout to prevent overlapping
+            plt.tight_layout()
+            return fig
 
     def create_animation(self,
                         output_path: str,
@@ -323,23 +380,40 @@ class AnimatedTSNEVisualizer:
 ########## Combined
 
     def create_combined_frame(self,
-                              displayed_indices: List[int],
-                              distances: List[Dict[str, Union[float, str, str]]],
-                              figsize: Tuple[int, int] = (12, 12),
-                              show_line: bool = False) -> plt.Figure:
+        displayed_indices: List[int],
+        distances: List[Dict[str, Union[float, str, str]]],
+        figsize: Tuple[int, int] = (15, 8),
+        show_line: bool = False) -> plt.Figure:
         """
-        Create a single frame showing both t-SNE and distance visualizations
+        Create a single frame showing both t-SNE and distance visualizations with improved layout
         """
         if self.cached_tsne_coords is None:
             raise ValueError("Must call compute_tsne_embedding() or from_dict() first")
 
-        # Create figure with two rows
+        # Create figure with revised layout including text area
         fig = plt.figure(figsize=figsize)
-        gs = plt.GridSpec(2, 2, height_ratios=[1.2, 0.8], width_ratios=[3, 1])
 
-        # Top row: t-SNE visualization (similar to original create_frame)
-        ax_tsne = fig.add_subplot(gs[0, 0])
-        ax_legend = fig.add_subplot(gs[0, 1])
+        # Create gridspec with three rows:
+        # Row 1: Title text (spans full width)
+        # Row 2: t-SNE plot and legend
+        # Row 3: t-SNE plot and distance plot
+        gs = plt.GridSpec(3, 2,
+                         width_ratios=[2, 1],
+                         height_ratios=[0.3, 0.85, 0.85],
+                         hspace=0.3)
+
+        # Title text area (spans full width)
+        ax_title = fig.add_subplot(gs[0, :])
+        ax_title.axis('off')
+
+        # Main t-SNE plot (spans rows 2 and 3 on left)
+        ax_tsne = fig.add_subplot(gs[1:, 0])
+
+        # Legend (top right)
+        ax_legend = fig.add_subplot(gs[1, 1])
+
+        # Distance plot (bottom right)
+        ax_dist = fig.add_subplot(gs[2, 1])
 
         # Get displayed points
         displayed_coords = self.cached_tsne_coords[displayed_indices]
@@ -363,41 +437,67 @@ class AnimatedTSNEVisualizer:
 
         # Color points based on their order of appearance
         colors = plt.cm.viridis(np.linspace(0, 1, len(displayed_indices)))
-        ax_tsne.scatter(displayed_coords[:, 0], displayed_coords[:, 1],
-                       c=colors, s=100, zorder=2)
+        scatter = ax_tsne.scatter(displayed_coords[:, 0], displayed_coords[:, 1],
+                                c=colors, s=100, zorder=2)
 
-        # Add numerical labels to points
+        # Add numerical labels to points with better positioning
         for i in range(len(displayed_indices)):
-            ax_tsne.annotate(str(i+1),
-                            (displayed_coords[i, 0], displayed_coords[i, 1]),
-                            xytext=(5, 5), textcoords='offset points',
-                            fontsize=10, color='black',
-                            bbox=dict(facecolor='white', edgecolor='none', alpha=0.7),
-                            zorder=3)
+            # Calculate offset direction based on point position
+            x, y = displayed_coords[i]
+            x_center = (x_max + x_min) / 2
+            y_center = (y_max + y_min) / 2
 
-        ax_tsne.set_title(f'Current point: {displayed_labels[-1]}', pad=20)
+            # Adjust offset direction to avoid overlapping with other points
+            x_offset = -15 if x > x_center else 15
+            y_offset = -15 if y > y_center else 15
 
-        # Create legend
+            ax_tsne.annotate(
+                str(i+1),
+                (x, y),
+                xytext=(x_offset * 0.3, y_offset * 0.3),
+                textcoords='offset points',
+                fontsize=9,
+                color='black',
+                bbox=dict(
+                    facecolor='white',
+                    edgecolor='none',
+                    alpha=0.7,
+                    pad=0.5
+                ),
+                zorder=3,
+                ha='center',
+                va='center'
+            )
+
+        # Enhanced legend formatting
         ax_legend.axis('off')
         legend_text = []
+        max_label_length = max(len(str(label)) for label in displayed_labels)
+
         for i, label in enumerate(displayed_labels):
-            legend_text.append(f"{i+1}. {label}")
+            # Format with consistent spacing and show more text
+            if len(str(label)) > 35:
+                wrapped_label = str(label)[:32] + "..."
+            else:
+                wrapped_label = str(label)
+            legend_text.append(f"{str(i+1).rjust(2)}. {wrapped_label}")
 
-        ax_legend.text(0, 0.95, '\n'.join(legend_text),
-                      transform=ax_legend.transAxes,
-                      verticalalignment='top',
-                      fontsize=10,
-                      fontfamily='monospace')
+        # Enhanced legend text display
+        ax_legend.text(
+            0.02, 0.98,
+            '\n'.join(legend_text),
+            transform=ax_legend.transAxes,
+            verticalalignment='top',
+            fontsize=12,
+            fontfamily='monospace',
+            linespacing=1.2
+        )
 
-        # Bottom row: Distance visualization
-        ax_dist = fig.add_subplot(gs[1, :])
-
+        # Distance visualization
         if len(displayed_indices) > 1:
-            # Get distances up to current point
             current_distances = [d['distance'] for d in distances[:len(displayed_indices)-1]]
             bars = ax_dist.bar(range(1, len(current_distances) + 1), current_distances)
 
-            # Color bars based on distance value
             if current_distances:
                 all_distances = [d['distance'] for d in distances]
                 normalize = plt.Normalize(min(all_distances), max(all_distances))
@@ -412,13 +512,34 @@ class AnimatedTSNEVisualizer:
         y_max = max(all_distances) * 1.1
         ax_dist.set_ylim(y_min, y_max)
 
-        # Labels for distance plot
-        ax_dist.set_xlabel('Transition Number')
-        ax_dist.set_ylabel('Normalized Distance')
-        ax_dist.grid(True, alpha=0.3)
+        # Improved labels and grid for distance plot
+        ax_dist.set_xlabel('Transition', fontsize=9)
+        ax_dist.set_ylabel('Distance', fontsize=9)
+        ax_dist.tick_params(axis='both', which='major', labelsize=8)
+        ax_dist.grid(True, alpha=0.2, linestyle='--')
 
-        # Adjust spacing between subplots
-        plt.subplots_adjust(left=0.1, right=0.9, top=0.95, bottom=0.1, hspace=0.3)
+        # Enhanced title with text wrapping and full width
+        current_label = displayed_labels[-1]
+
+        # Wrap text to 5 lines
+        wrapped_text = wrap(current_label, width=100)
+        if len(wrapped_text) > 5:
+            title_text = '\n'.join(wrapped_text[:5]) + '...'
+        else:
+            title_text = '\n'.join(wrapped_text)
+
+        ax_title.text(0.5, 0.8,
+            f'{title_text}',
+            horizontalalignment='center',
+            verticalalignment='center',
+            fontsize=14,
+            fontweight='bold',
+            transform=ax_title.transAxes,
+            linespacing=1.2
+        )
+
+        # Adjust layout to prevent overlapping
+        plt.tight_layout()
         return fig
 
     def create_combined_animation(self,
